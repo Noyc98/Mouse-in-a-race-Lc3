@@ -1,0 +1,638 @@
+
+; Convention: Haifa
+
+.ORIG x3000
+LD R6, STACK_ADDRESS		; R6 <- Stack Pointer
+
+LEA R0 ENTER_SIZE_MES
+PUTS
+JSR GetNum
+ADD R2 R0 #0 ; SIZE
+
+LEA R0 ENTER_MAZE_MARTIX_MES
+PUTS
+LD R0 New_Line_Sign	; R0="\n " in ASCII
+OUT
+LD R1 MatrixMazePtr
+
+;Before call GetMatrix
+STR R1 R6 #-2
+STR R2 R6 #-1
+ADD R6 R6 #-2
+JSR GetMatrix
+ADD R6 R6 #2	; Return from call
+
+LD R1 MatrixMazePtr
+AND R0 R0 #0    ; R0 = 0 ->  RETURN VAL
+AND R3 R3 #0    ; R3 = 0 -> ROW
+AND R4 R4 #0    ; R4 = 0 -> COL
+; Before call FindMaze
+STR R1 R6 #-4
+STR R2 R6 #-3
+STR R3 R6 #-2
+STR R4 R6 #-1
+ADD R6 R6 #-4
+JSR FindMaze
+ADD R6 R6 #4	; Return from call
+
+ADD R0 R0 #0
+BRz MAZE_NOT_FOUND
+; MAZE_FOUND:
+LEA R0 MAZE_FOUND_MES
+PUTS
+LD R0 New_Line_Sign	; R0="\n " in ASCII
+OUT
+BR PRINT_MAZE
+
+MAZE_NOT_FOUND:
+LEA R0 MAZE_HAS_NOT_FOUND_MES
+PUTS
+BR END
+
+PRINT_MAZE:
+; Before call PrintMatrix
+STR R1 R6 #-2
+STR R2 R6 #-1
+ADD R6 R6 #-2
+JSR PrintMatrix
+ADD R6 R6 #2	; Return from call
+
+END:
+HALT
+ENTER_SIZE_MES .stringz "Please enter a number between 2 to 20: "
+ENTER_MAZE_MARTIX_MES .stringz "Please enter the maze matrix:"
+MAZE_HAS_NOT_FOUND_MES .stringz "OH NO! It seems the mouse has no luck in this maze..."
+MAZE_FOUND_MES .stringz "Yummy! The mouse has found the cheese!"
+MatrixMazePtr .fill MatrixMaze
+New_Line_Sign .fill #10
+STACK_ADDRESS	.fill	XBFFF
+
+;********************************************************;
+MinusAscii_GetNum .fill #-45
+MinusAscii_POS_GetNum .fill #45
+MinusZeroAscii_GetNum .fill #-48
+Minus_Space_GetNum .fill #-32
+Space_GetNum .fill #32
+GetNum: ; (R1=MatrixMaze, R2=size)
+; Registers backup
+ADD R6 R6 #-5
+STR R7 R6 #0 	; Backup return value
+; STR R5-R1 #offset in stack- Local registers backup
+STR R4, R6, #1
+STR R3, R6, #2
+STR R2, R6, #3
+STR R1, R6, #4 
+
+AND R0 R0 #0
+AND R1 R1 #0 ; RESULT
+AND R2 R2 #0 ; MinusZeroAscii
+AND R3 R3 #0	; Temp
+AND R4 R4 #0    ; Flag for negative number
+ 
+FIRST_ENTER:
+GETC 		; At R0 the number is saved
+OUT
+
+; Check if first input is '-'
+LD R2 MinusAscii_GetNum 
+ADD R2 R0 R2 	;"-" = 42 in ASCII
+BRnp CONTINUE_CHECKS
+ADD R4 R4 #1    ; Flag for neg number
+BR LOOP_GetNum
+
+CONTINUE_CHECKS:
+; Else check if first enter is ENTER
+ADD R2 R0 #-10
+BRz END_SUB
+
+; Check if space
+LD R2 Minus_Space_GetNum
+ADD R2 R0 R2
+BRz FIRST_ENTER
+
+LD R2 MinusZeroAscii_GetNum	; R2=-48
+ADD R0 R0 R2         ; R0=R0-48
+ADD R1 R0 #0         ; R1=R0
+
+; Geting all the outer numbers
+LOOP_GetNum:
+	GETC 		; At R0 the number is saved
+	OUT
+ 
+	; Check_end_string: 
+	ADD R3 R0 #-10	
+	BRz END_SUB		; If it is ENTER
+    
+    LD R2 Minus_Space_GetNum
+    ADD R2 R0 R2
+    BRz END_SUB		; if(R0 == ' ')
+	
+    ; Change to original value (0<= number <=9)
+	LD R2 MinusZeroAscii_GetNum	; R2=-48
+	ADD R0 R0 R2         	; R0=R0-48
+
+    ADD R3 R0 #0				 ; Save R3=R0
+	AND R2 R2 #0
+	ADD R2 R2 #10				 ; R2=10
+	;before call Mul
+	STR R1 R6 #-2
+	STR R2 R6 #-1
+	ADD R6 R6 #-2
+	JSR Mul			         	 ; R1*R2=R0 ; R1*10=R0
+	ADD R6 R6 #2	        	 ; Return from call
+	ADD R1 R0 R3 	        	 ; R1 = (R1*10)+R3
+	BR LOOP_GetNum
+ 
+END_SUB:
+ADD R4 R4 #0
+BRz COUNTINUE_GetNum
+NOT R1 R1
+ADD R1 R1 #1
+ 
+COUNTINUE_GetNum:
+ADD R0 R1 #0
+
+; Registers restoration
+LDR R7 R6 #0	 ; Restore return address
+; LDR R5-R1 #offset in stack
+LDR R4, R6, #1
+LDR R3, R6, #2
+LDR R2, R6, #3
+LDR R1, R6, #4 
+
+ADD R6 R6 #5 	; Pop stack frame
+RET
+
+;********************************************************;
+UNVALID_INPUT_MES .stringz	"Illegal maze! Please try again:"
+VALID_INPUT_MES .stringz	"The mouse is hopeful he will find his cheese..."
+New_Line_Sign_GetMatrix .fill #10
+
+GetMatrix:;(R1=MatrixMaze, R2=size)
+; Registers backup
+ADD R6 R6 #-6
+STR R7 R6 #0 	; Backup return value
+; STR R5-R1 #offset in stack- Local registers backup
+STR R5, R6, #1
+STR R4, R6, #2
+STR R3, R6, #3
+STR R2, R6, #4
+STR R1, R6, #5 
+; Load function parametrs to registers
+; LDR R1-R2 #offset in stack
+LDR R1, R6, #6			; R1 <- MatrixMaze
+LDR R2, R6, #7			; R2 <- SIZE
+
+AND R0 R0 #0
+AND R3 R3 #0    ; Rows counter
+AND R4 R4 #0    ; Cols counter
+AND R5 R5 #0    ; Flag
+
+FOR_ROWS_GetMatrix:
+    LDR R2, R6, #7			; R2 <- SIZE
+
+    FOR_COLS_GetMatrix:
+        ADD R1 R3 #0        
+        ; Mul func call
+        ; before call
+        STR R1 R6 #-2
+        STR R2 R6 #-1
+        ADD R6 R6 #-2
+        JSR Mul
+        ADD R6 R6 #2	; Return from call
+        LDR R1, R6, #6			; R1 <- MatrixMaze
+ 
+        ;R1=M[ROW][COL] = R1+ R4(=COL) + (R2*R3=ROW)
+        ADD R1 R1 R0
+        ADD R1 R1 R4
+        
+        JSR GetNum  ;Gets input from user
+
+        ; VALID_INPUT: if(R0!= 1 && R0!= 0)
+        ADD R2 R0 #-1   ;R0!= 1
+        BRz VALID_END
+        ADD R0 R0 #0    ;R0!= 0
+        BRz VALID_BEGIN
+        BR UPDATE_FLAG
+        
+        VALID_BEGIN:    ;if(R3==0 && R4==0 && R0==0)
+        ADD R3 R3 #0    ; R3==0
+        BRnp VALID_END
+        ADD R4 R4 #0    ; R4==0
+        BRnp VALID_END
+        ADD R0 R0 #0    ; R0==0
+        BRnp VALID_END
+        BR UPDATE_FLAG
+
+        VALID_END:  ;if(R3==R2-1 && R4==R2-1 && R0==0)
+        ; R3 == R2-1
+        LDR R2, R6, #7	; R2 <- SIZE
+        ADD R2 R2 #-1   ; N-1 is the last valid cell
+        NOT R2 R2
+        ADD R2 R2 #1    ; R2 = -R2
+        ADD R2 R3 R2    ; R3-R2
+        BRnp CONTINUE_GetMatrix
+        LDR R2, R6, #7	; R2 <- SIZE
+        ADD R2 R2 #-1   ; N-1 is the last valid cell
+        NOT R2 R2
+        ADD R2 R2 #1    ; R2 = -R2
+        ADD R2 R4 R2    ; R4-(R2)
+        BRnp CONTINUE_GetMatrix
+        ADD R0 R0 #0
+        BRnp CONTINUE_GetMatrix
+        BR UPDATE_FLAG
+       
+        UPDATE_FLAG:    ; Invalid maze
+        ADD R5 R5 #1
+
+        CONTINUE_GetMatrix:
+        STR R0 R1 #0
+        LDR R1, R6, #6		; R1 <- MatrixMaze
+
+        END_COLS:
+        ADD R4 R4 #1        ; cols++
+        LDR R2, R6, #7		; R2 <- SIZE
+        NOT R2 R2
+        ADD R2 R2 #1
+        ADD R2 R4 R2        ; Check if last col
+        BRz END_ROWS
+        LDR R2, R6, #7		; R2 <- SIZE
+        BR FOR_COLS_GetMatrix
+        
+    END_ROWS:
+    ADD R3 R3 #1        ; rows++
+    LDR R2, R6, #7		; R2 <- SIZE
+    NOT R2 R2 
+    ADD R2 R2 #1
+    ADD R2 R3 R2    ; Check if last row
+    BRz CHCK_INPUT
+    AND R4 R4 #0    ;Initialias cols
+    BR FOR_ROWS_GetMatrix
+
+CHCK_INPUT:
+LDR R2, R6, #7  ; R2 <- SIZE
+ADD R5 R5 #0    ; Flag = 1 -> unvalid input
+BRz ELSE_VALID_INPUT
+LEA R0 UNVALID_INPUT_MES
+PUTS
+LD R0 New_Line_Sign_GetMatrix
+OUT
+
+; Initialias registers
+AND R0 R0 #0
+AND R3 R3 #0
+AND R4 R4 #0
+AND R5 R5 #0
+BR FOR_ROWS_GetMatrix
+
+ELSE_VALID_INPUT:   ;Flag = 0 -> valid input
+LEA R0 VALID_INPUT_MES
+PUTS
+LD R0 New_Line_Sign_GetMatrix
+OUT
+
+END_GET_MATRIX:
+; Registers restoration
+LDR R7 R6 #0	 ; Restore return address
+; LDR R5-R1 #offset in stack
+LDR R5, R6, #1
+LDR R4, R6, #2
+LDR R3, R6, #3
+LDR R2, R6, #4
+LDR R1, R6, #5 
+
+ADD R6 R6 #6 	;pop stack frame
+RET
+ 
+;********************************************************;
+Mul: ; Mul subroutine : R0 <-- R2 * R1
+; Registers backup
+ADD R6 R6 #-4
+STR R7 R6 #0 	; Backup return value
+; STR R3-R1 #offset in stack- Local registers backup
+STR R3, R6, #1
+STR R2, R6, #2
+STR R1, R6, #3
+; Load function parametrs to registers
+;LDR R1-R2 #offset in stack
+LDR R1, R6, #4
+LDR R2, R6, #5		
+
+;Initializes R3 to 0
+AND R3 R3 #0
+;Initializes R0 to 0
+AND R0 R0 #0
+ 
+;CHECK IF ONE OF THE PARAMETERS IS 0
+ADD R2 R2 #0 
+BRz END_MUL_SUB
+ADD R1 R1 #0 
+BRz END_MUL_SUB
+ 
+ADD R3 R3 R1 ; R3 = R1
+BRp DO_MUL
+ 
+DO_MUL:
+AND R3 R3 R3 ; check if R3 is 0
+BRnz END_MUL_SUB
+ADD R0 R0 R2 ; R0 += R2
+ADD R3 R3 #-1 ; R3--
+BR DO_MUL
+ 
+END_MUL_SUB:
+; Registers restoration
+LDR R7 R6 #0	 ; restore return address
+;LDR R3-R1 #offset in stack
+LDR R3, R6, #1
+LDR R2, R6, #2
+LDR R1, R6, #3
+ADD R6 R6 #4 	;pop stack frame
+RET
+
+;********************************************************;
+Pass_Sign_PrintMatrix .fill #42
+Minus_Pass_Sign .fill #-42
+Zero_Ascii_PrintMatrix .fill #48
+New_Line_Sign_PrintMatrix .fill #10
+Space_Sign_PrintMatrix .fill #32 
+
+PrintMatrix:	;(R1=MatrixMaze, R2=size);gets matrix in R1  and print, R2=rows ,R3 =cols
+; Registers backup
+ADD R6 R6 #-5
+STR R7 R6 #0 	; Backup return value
+; STR R5-R1 #offset in stack- Local registers backup
+STR R5, R6, #1
+STR R4, R6, #2
+STR R2, R6, #3
+STR R1, R6, #4 
+
+; Load function parametrs to registers
+; LDR R1-R2 #offset in stack
+LDR R1, R6, #5			; R2 <- SIZE
+LDR R2, R6, #6			; R1 <- MatrixMaze
+
+AND R0 R0 #0 ; Temp
+AND R4 R4 #0 ; Row index
+AND R5 R5 #0 ; col index
+;FOR_ROWS_PrintMatrix: 
+	FOR_COLS_PrintMatrix:
+
+		ADD R1 R4 #0	; R1 = R4=row
+	
+        ; Mul func call
+        ; before call
+        STR R1 R6 #-2
+        STR R2 R6 #-1
+        ADD R6 R6 #-2
+        JSR Mul         ; R0 = R1*R2
+        ADD R6 R6 #2	; Return from call
+		LDR R1 R6 #4		; R1 = Pointer to MatrixMaze
+        
+        ; R1 = M[ROW][COL] = R1 + R2*R4 + R5
+		ADD R1 R1 R0		; R1 + (R2*R4)
+		ADD R1 R1 R5		; R1 + R5
+		
+		LDR R0 R1 #0		; R0 = MEM[R1]
+        LD R1 Minus_Pass_Sign
+		ADD R1 R0 R1
+        BRz PRINT_PASS_SIGN
+        ; IF 0/1
+        LD R1 Zero_Ascii_PrintMatrix
+        ADD R0 R0 R1
+		OUT				; Print R0
+        BR CONTINUE_PRINT
+        
+        PRINT_PASS_SIGN:
+        OUT ; Print '*'
+
+        CONTINUE_PRINT:
+		LD R0 Space_Sign_PrintMatrix
+		OUT					; Print Space
+		
+		COLS_COUNTER_PrintMatrix:
+		ADD R5 R5 #1
+		NOT R0 R5
+		ADD R0 R0 #1
+		LDR R2, R6, #6
+		ADD R0 R2 R0	; if(R5<R2)-> Countinue FOR_COLS_Print
+		BRz ROWS_COUNTER_PrintMatrix
+		BR FOR_COLS_PrintMatrix
+		
+	ROWS_COUNTER_PrintMatrix:		
+	LDR R2 R6 #6		; R2 = size
+    ADD R4 R4 #1		; R4++
+    NOT R0 R4
+    ADD R0 R0 #1		; R0 = -R4
+    ADD R0 R2 R0		; R0 = R2 - R4
+    BRz END_PrintMatrix	; if(R4 == size) -> END_PrintMatrix
+    LD R0 New_Line_Sign_PrintMatrix
+    OUT                    ; Print New line
+    AND R5 R5 #0		; R5=0 Col index reset
+    BR FOR_COLS_PrintMatrix	; if(R5 < size) -> Print current row
+	
+END_PrintMatrix:
+; Registers restoration
+LDR R7 R6 #0	 ; Restore return address
+; LDR R5-R1 #offset in stack
+LDR R5, R6, #1
+LDR R4, R6, #2
+LDR R2, R6, #3
+LDR R1, R6, #4 
+
+ADD R6 R6 #5 	; Pop stack frame
+RET
+
+;********************************************************;
+
+VALID_PASS_SIGN .fill #42
+VISITED_SIGN .fill #88
+MINUS_VISITED_SIGN .fill #-88
+
+FindMaze: ;(R1=MatrixMaze, R2=size, R3=row, R4=col)
+; Registers backup
+ADD R6 R6 #-6
+STR R7 R6 #0 	; Backup return value
+; STR R5-R1 #offset in stack- Local registers backup
+STR R5, R6, #1
+STR R4, R6, #2
+STR R3, R6, #3
+STR R2, R6, #4
+STR R1, R6, #5 
+
+; Load function parametrs to registers
+; LDR R1-R2 #offset in stack
+LDR R1, R6, #6			; R1 <- MATRIX_MAZE
+LDR R2, R6, #7          ; R2 <- SIZE
+LDR R3, R6, #8			; R3 <- ROW
+LDR R4, R6, #9          ; R4 <- COL
+
+AND R5 R5 #0
+
+; if(col==R2 || row==R2) RETURN_FALSE
+NOT R2 R2
+ADD R2 R2 #1
+ADD R2 R4 R2 
+BRz RETURN_FALSE    ; Out of boundries
+LDR R2, R6, #7		; R2 <- SIZE
+NOT R2 R2
+ADD R2 R2 #1
+ADD R2 R3 R2
+BRz RETURN_FALSE    ; Out of boundries
+
+; if(col<0 || row<0) RETURN_FALSE
+ADD R4 R4 #0
+BRn RETURN_FALSE    ; Out of boundries
+ADD R3 R3 #0
+BRn RETURN_FALSE    ; Out of boundries
+
+; R5 = M[ROW][COL] = R1 + (ROW_NUM * COLS )+ COL_NUM	
+LDR R2, R6, #7	; R2 <- SIZE
+ADD R1 R3 #0    ; R1 = ROW_NUM (R3)
+; Mul func call
+;before call
+STR R1 R6 #-2
+STR R2 R6 #-1
+ADD R6 R6 #-2
+JSR Mul
+ADD R6 R6 #2	;Return from call
+
+LDR R1, R6, #6  ; R1 <- MATRIX_MAZE
+ADD R5 R0 R1    ; R5 = R0 + R1 = ROW_NUM * COLS+ MATRIXMAZE
+ADD R5 R5 R4    ; Add col number
+
+; if(MEM[R5] == 0) -> RETURN_FALSE
+LDR R2 R5 #0    ; if 0 return
+BRz RETURN_FALSE
+
+; if(MEM[R5] == X) -> RETURN_FALSE because we visit there already
+LDR R2 R5 #0    ; MEM[R5]
+LD R1 MINUS_VISITED_SIGN
+ADD R1 R2 R1    ; MEM[R5] - X
+BRz RETURN_FALSE
+LDR R1, R6, #6  ; R1 <- MATRIX_MAZE
+
+;if(col==R2-1 && row==R2-1) 
+LDR R2, R6, #7		; R2 <- SIZE
+ADD R2 R2 #-1   ; R2 == N-1 -> Last valid col
+NOT R2 R2
+ADD R2 R2 #1    ; R2 = -R2
+ADD R2 R3 R2
+BRn CONTINUE_RECURSIVE
+LDR R2, R6, #7	; R2 <- SIZE
+ADD R2 R2 #-1   ; R2 == N-1 -> Last valid col
+NOT R2 R2
+ADD R2 R2 #1    ; R2 = -R2
+ADD R2 R4 R2
+BRn CONTINUE_RECURSIVE
+
+LD R1 VALID_PASS_SIGN
+STR R1 R5 #0    ; M[row][col] = '*'
+AND R0 R0 #0
+ADD R0 R0 #1
+BR END_FIND_MAZE
+
+
+CONTINUE_RECURSIVE:
+LD R1 VISITED_SIGN
+STR R1 R5 #0    ; M[row][col]="X" -> visited
+
+LDR R1, R6, #6  ; R1 <- MATRIX_MAZE
+LDR R2, R6, #7	; R2 <- SIZE
+
+; Recursive call right
+; Before call
+ADD R4 R4 #1    ; R0W++
+STR R1 R6 #-4
+STR R2 R6 #-3
+STR R3 R6 #-2
+STR R4 R6 #-1
+
+ADD R6 R6 #-4
+JSR FindMaze
+ADD R6 R6 #4	;Return from call
+ADD R4 R4 #-1	;Return R4 to current value
+
+ADD R0 R0 #0
+BRp RETURN_TRUE
+
+; Recursive call down
+; Before call
+ADD R3 R3 #1
+STR R1 R6 #-4
+STR R2 R6 #-3
+STR R3 R6 #-2
+STR R4 R6 #-1
+
+ADD R6 R6 #-4
+JSR FindMaze
+ADD R6 R6 #4	; Return from call
+ADD R3 R3 #-1	; Return R3 to current value
+
+ADD R0 R0 #0
+BRp RETURN_TRUE
+
+; Recursive call left
+; Before call
+ADD R4 R4 #-1
+STR R1 R6 #-4
+STR R2 R6 #-3
+STR R3 R6 #-2
+STR R4 R6 #-1
+
+ADD R6 R6 #-4
+JSR FindMaze
+ADD R6 R6 #4	; Return from call
+ADD R4 R4 #1	; Return R4 to current value
+
+ADD R0 R0 #0
+BRp RETURN_TRUE
+
+; Recursive call up
+; Before call
+ADD R3 R3 #-1
+STR R1 R6 #-4
+STR R2 R6 #-3
+STR R3 R6 #-2
+STR R4 R6 #-1
+
+ADD R6 R6 #-4
+JSR FindMaze
+ADD R6 R6 #4	; Return from call
+ADD R3 R3 #1	; Return R3 to current value
+
+ADD R0 R0 #0
+BRp RETURN_TRUE
+
+BR CHANGE_CELL_TO_ORIGINAL_VAL
+
+RETURN_TRUE:
+LD R1 VALID_PASS_SIGN
+STR R1 R5 #0    ; M[row][col] = '*'
+LDR R1, R6, #6  ; R1 <- MATRIX_MAZE
+BR END_FIND_MAZE
+
+CHANGE_CELL_TO_ORIGINAL_VAL:
+AND R1 R1 #0
+ADD R1 R1 #1			; R1 = 1
+STR R1 R5 #0			; MEM[R5] = 1 , return cell to his original value
+LDR R1 R6 #6			; R1 = MatrixMaze
+
+RETURN_FALSE:
+AND R0 R0 #0    ; Return value is 0
+
+END_FIND_MAZE:
+; Registers restoration
+LDR R7 R6 #0	 ; Restore return address
+; LDR R5-R1 #offset in stack
+LDR R5, R6, #1
+LDR R4, R6, #2
+LDR R3, R6, #3
+LDR R2, R6, #4
+LDR R1, R6, #5 
+
+ADD R6 R6 #6 	; Pop stack frame
+RET
+
+;********************************************************;
+MatrixMaze .blkw #400 #-1
+.END
